@@ -14,6 +14,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,10 +28,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.db.LanguageEntity
 import com.example.data.db.MessageEntity
+import com.example.ui.viewmodel.AppScreen
 import com.example.ui.viewmodel.LanguageViewModel
 import kotlinx.coroutines.launch
 
@@ -47,6 +51,9 @@ fun ChatScreen(
     val isRecording by viewModel.isRecording.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
     val isTtsReady by viewModel.isTtsReady.collectAsState()
+    val isChatDetailOpen by viewModel.isChatDetailOpen.collectAsState()
+    val allLanguages by viewModel.allLanguages.collectAsState()
+    val allMessages by viewModel.allMessages.collectAsState()
 
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -59,27 +66,198 @@ fun ChatScreen(
         }
     }
 
-    if (activeLang == null) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(24.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Translate,
-                    contentDescription = null,
-                    modifier = Modifier.size(72.dp),
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+    if (!isChatDetailOpen || activeLang == null) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text("Discussions", fontWeight = FontWeight.Bold)
+                            if (allLanguages.isNotEmpty()) {
+                                Text(
+                                    text = "${allLanguages.size} compagnons d'étude actifs",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)
+                    )
                 )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Sélectionnez une langue pour commencer",
-                    style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center
+            },
+            floatingActionButton = {
+                ExtendedFloatingActionButton(
+                    text = { Text("Nouvelle langue") },
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    onClick = { viewModel.setScreen(AppScreen.LANGUAGES) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 )
+            },
+            modifier = modifier.fillMaxSize()
+        ) { innerPadding ->
+            if (allLanguages.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("🗣️", fontSize = 40.sp)
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Bienvenue dans Reactors !",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Ajoutez votre première langue d'étude pour commencer à discuter avec votre compagnon IA.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(
+                            onClick = { viewModel.setScreen(AppScreen.LANGUAGES) },
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Translate, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Ajouter une langue")
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    items(allLanguages) { language ->
+                        val lastMessage = allMessages.firstOrNull { it.languageId == language.id }
+
+                        Column {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.openChatDetail(language.id) }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(54.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = language.flagEmoji, fontSize = 30.sp)
+                                }
+
+                                Spacer(modifier = Modifier.width(14.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f, fill = false)) {
+                                            Text(
+                                                text = language.interlocutorName,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = language.currentLevel,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                            }
+                                        }
+
+                                        if (lastMessage != null) {
+                                            Text(
+                                                text = formatMessageTimestamp(lastMessage.timestamp),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Ami d'${language.name}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    val snippetText = if (lastMessage != null) {
+                                        when (lastMessage.sender) {
+                                            "user" -> "Vous : ${lastMessage.text}"
+                                            "assistant_correction" -> "📝 Correction : ${lastMessage.text}"
+                                            else -> lastMessage.text
+                                        }
+                                    } else {
+                                        "Aucun message pour le moment. Dites bonjour ! 👋"
+                                    }
+
+                                    Text(
+                                        text = snippetText,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 84.dp, end = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                            )
+                        }
+                    }
+                }
             }
         }
     } else {
@@ -88,6 +266,14 @@ fun ChatScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.closeChatDetail() }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Retour"
+                            )
+                        }
+                    },
                     title = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -534,5 +720,26 @@ fun ChatMessageBubble(
                 }
             }
         }
+    }
+}
+
+fun formatMessageTimestamp(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    val calendar = java.util.Calendar.getInstance()
+    val msgCalendar = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
+    
+    val isToday = calendar.get(java.util.Calendar.YEAR) == msgCalendar.get(java.util.Calendar.YEAR) &&
+            calendar.get(java.util.Calendar.DAY_OF_YEAR) == msgCalendar.get(java.util.Calendar.DAY_OF_YEAR)
+            
+    return if (isToday) {
+        val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        sdf.format(java.util.Date(timestamp))
+    } else if (diff < 7 * 24 * 60 * 60 * 1000L) {
+        val sdf = java.text.SimpleDateFormat("EEEE", java.util.Locale.getDefault())
+        sdf.format(java.util.Date(timestamp))
+    } else {
+        val sdf = java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault())
+        sdf.format(java.util.Date(timestamp))
     }
 }

@@ -116,6 +116,9 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE languageId = :languageId ORDER BY timestamp ASC")
     suspend fun getMessagesForLanguage(languageId: String): List<MessageEntity>
 
+    @Query("SELECT * FROM messages ORDER BY timestamp DESC")
+    fun getAllMessagesFlow(): Flow<List<MessageEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: MessageEntity)
 

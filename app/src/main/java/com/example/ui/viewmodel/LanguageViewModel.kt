@@ -70,9 +70,15 @@ class LanguageViewModel(application: Application) : AndroidViewModel(application
     val apiKeys: StateFlow<List<ApiKeyEntity>> = repository.allApiKeysFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allMessages: StateFlow<List<MessageEntity>> = repository.allMessagesFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // UI state
     private val _currentScreen = MutableStateFlow(AppScreen.CHAT)
     val currentScreen = _currentScreen.asStateFlow()
+
+    private val _isChatDetailOpen = MutableStateFlow(false)
+    val isChatDetailOpen = _isChatDetailOpen.asStateFlow()
 
     private val _chatInput = MutableStateFlow("")
     val chatInput = _chatInput.asStateFlow()
@@ -156,7 +162,19 @@ class LanguageViewModel(application: Application) : AndroidViewModel(application
                 NotificationScheduler.scheduleAlarms(getApplication(), langId, lang.wakeUpTimes)
             }
             _currentScreen.value = AppScreen.CHAT
+            _isChatDetailOpen.value = true
         }
+    }
+
+    fun openChatDetail(langId: String) {
+        viewModelScope.launch {
+            repository.setActiveLanguage(langId)
+            _isChatDetailOpen.value = true
+        }
+    }
+
+    fun closeChatDetail() {
+        _isChatDetailOpen.value = false
     }
 
     fun addNewLanguage(id: String, name: String, emoji: String, personality: String, contactName: String) {
@@ -175,6 +193,7 @@ class LanguageViewModel(application: Application) : AndroidViewModel(application
             repository.insertLanguage(newLang)
             repository.setActiveLanguage(cleanId)
             _currentScreen.value = AppScreen.CHAT
+            _isChatDetailOpen.value = true
         }
     }
 

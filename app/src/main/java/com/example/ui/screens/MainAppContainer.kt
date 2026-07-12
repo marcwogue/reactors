@@ -30,7 +30,13 @@ fun MainAppContainer(
                 // Tab Chat
                 NavigationBarItem(
                     selected = currentScreen == AppScreen.CHAT,
-                    onClick = { viewModel.setScreen(AppScreen.CHAT) },
+                    onClick = {
+                        if (currentScreen == AppScreen.CHAT) {
+                            viewModel.closeChatDetail()
+                        } else {
+                            viewModel.setScreen(AppScreen.CHAT)
+                        }
+                    },
                     icon = {
                         Icon(
                             imageVector = if (currentScreen == AppScreen.CHAT) Icons.Default.ChatBubble

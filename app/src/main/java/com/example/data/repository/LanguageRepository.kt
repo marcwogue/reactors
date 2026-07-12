@@ -87,6 +87,8 @@ class LanguageRepository(
         return messageDao.getMessagesForLanguageFlow(languageId)
     }
 
+    val allMessagesFlow: Flow<List<MessageEntity>> = messageDao.getAllMessagesFlow()
+
     suspend fun insertMessage(message: MessageEntity) = withContext(Dispatchers.IO) {
         messageDao.insertMessage(message)
     }
