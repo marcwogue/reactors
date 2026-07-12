@@ -10,17 +10,48 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
-// Restore debug.keystore from debug.keystore.base64 if missing
+// Restore debug.keystore from debug.keystore.base64 if missing or generate it
 val debugKeystoreFile = file("${rootDir}/debug.keystore")
 val debugBase64File = file("${rootDir}/debug.keystore.base64")
-if (!debugKeystoreFile.exists() && debugBase64File.exists()) {
-    try {
-        val base64Bytes = debugBase64File.readBytes()
-        val cleanBase64 = String(base64Bytes).replace("\\s".toRegex(), "")
-        val decodedBytes = Base64.getDecoder().decode(cleanBase64)
-        debugKeystoreFile.writeBytes(decodedBytes)
-    } catch (e: Exception) {
-        logger.error("Failed to restore debug.keystore: ${e.message}")
+
+if (!debugKeystoreFile.exists()) {
+    if (debugBase64File.exists()) {
+        try {
+            val base64Bytes = debugBase64File.readBytes()
+            val cleanBase64 = String(base64Bytes).replace("\\s".toRegex(), "")
+            val decodedBytes = Base64.getDecoder().decode(cleanBase64)
+            debugKeystoreFile.writeBytes(decodedBytes)
+            logger.lifecycle("Successfully restored debug.keystore from base64")
+        } catch (e: Exception) {
+            logger.error("Failed to restore debug.keystore: ${e.message}")
+        }
+    }
+    
+    // Fallback: Generate a new debug keystore if still missing (critical for clean CI checkouts)
+    if (!debugKeystoreFile.exists()) {
+        try {
+            logger.lifecycle("Generating new debug.keystore dynamically...")
+            val process = ProcessBuilder(
+                "keytool", "-genkey", "-v",
+                "-keystore", debugKeystoreFile.absolutePath,
+                "-storepass", "android",
+                "-alias", "androiddebugkey",
+                "-keypass", "android",
+                "-keyalg", "RSA",
+                "-keysize", "2048",
+                "-validity", "10000",
+                "-dname", "CN=Android Debug,O=Android,C=US"
+            ).start()
+            val exitCode = process.waitFor()
+            if (exitCode == 0) {
+                logger.lifecycle("Successfully generated a new debug.keystore")
+            } else {
+                val errorStream = process.errorStream.bufferedReader().readText()
+                logger.error("Failed to generate debug.keystore, keytool exit code: $exitCode. Error: $errorStream")
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to execute keytool: ${e.message}")
+        }
     }
 }
 
