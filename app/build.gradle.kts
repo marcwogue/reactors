@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.io.File
 import java.util.Base64
 
 plugins {
@@ -10,49 +11,71 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
-// Restore debug.keystore from debug.keystore.base64 if missing or generate it
-val debugKeystoreFile = file("${rootDir}/debug.keystore")
-val debugBase64File = file("${rootDir}/debug.keystore.base64")
+abstract class EnsureDebugKeystoreTask : DefaultTask() {
+    @get:Internal
+    abstract val keystoreFile: org.gradle.api.provider.Property<File>
 
-if (!debugKeystoreFile.exists()) {
-    if (debugBase64File.exists()) {
-        try {
-            val base64Bytes = debugBase64File.readBytes()
-            val cleanBase64 = String(base64Bytes).replace("\\s".toRegex(), "")
-            val decodedBytes = Base64.getDecoder().decode(cleanBase64)
-            debugKeystoreFile.writeBytes(decodedBytes)
-            logger.lifecycle("Successfully restored debug.keystore from base64")
-        } catch (e: Exception) {
-            logger.error("Failed to restore debug.keystore: ${e.message}")
-        }
-    }
-    
-    // Fallback: Generate a new debug keystore if still missing (critical for clean CI checkouts)
-    if (!debugKeystoreFile.exists()) {
-        try {
-            logger.lifecycle("Generating new debug.keystore dynamically...")
-            val process = ProcessBuilder(
-                "keytool", "-genkey", "-v",
-                "-keystore", debugKeystoreFile.absolutePath,
-                "-storepass", "android",
-                "-alias", "androiddebugkey",
-                "-keypass", "android",
-                "-keyalg", "RSA",
-                "-keysize", "2048",
-                "-validity", "10000",
-                "-dname", "CN=Android Debug,O=Android,C=US"
-            ).start()
-            val exitCode = process.waitFor()
-            if (exitCode == 0) {
-                logger.lifecycle("Successfully generated a new debug.keystore")
-            } else {
-                val errorStream = process.errorStream.bufferedReader().readText()
-                logger.error("Failed to generate debug.keystore, keytool exit code: $exitCode. Error: $errorStream")
+    @get:Internal
+    abstract val base64File: org.gradle.api.provider.Property<File>
+
+    @TaskAction
+    fun run() {
+        val keystore = keystoreFile.get()
+        val base64 = base64File.get()
+        val log = org.gradle.api.logging.Logging.getLogger("ensureDebugKeystore")
+
+        if (!keystore.exists()) {
+            if (base64.exists()) {
+                try {
+                    val base64Bytes = base64.readBytes()
+                    val cleanBase64 = String(base64Bytes).replace("\\s".toRegex(), "")
+                    val decodedBytes = Base64.getDecoder().decode(cleanBase64)
+                    keystore.writeBytes(decodedBytes)
+                    log.lifecycle("Successfully restored debug.keystore from base64")
+                } catch (e: Exception) {
+                    log.error("Failed to restore debug.keystore: ${e.message}")
+                }
             }
-        } catch (e: Exception) {
-            logger.error("Failed to execute keytool: ${e.message}")
+            
+            // Fallback: Generate a new debug keystore if still missing (critical for clean CI checkouts)
+            if (!keystore.exists()) {
+                try {
+                    log.lifecycle("Generating new debug.keystore dynamically...")
+                    val process = ProcessBuilder(
+                        "keytool", "-genkey", "-v",
+                        "-keystore", keystore.absolutePath,
+                        "-storepass", "android",
+                        "-alias", "androiddebugkey",
+                        "-keypass", "android",
+                        "-keyalg", "RSA",
+                        "-keysize", "2048",
+                        "-validity", "10000",
+                        "-dname", "CN=Android Debug,O=Android,C=US"
+                    ).start()
+                    val exitCode = process.waitFor()
+                    if (exitCode == 0) {
+                        log.lifecycle("Successfully generated a new debug.keystore")
+                    } else {
+                        val errorStream = process.errorStream.bufferedReader().readText()
+                        log.error("Failed to generate debug.keystore, keytool exit code: $exitCode. Error: $errorStream")
+                    }
+                } catch (e: Exception) {
+                    log.error("Failed to execute keytool: ${e.message}")
+                }
+            }
         }
     }
+}
+
+// Define a task to restore or generate the debug.keystore at execution time (to avoid configuration cache problems)
+val ensureDebugKeystoreTask = tasks.register<EnsureDebugKeystoreTask>("ensureDebugKeystore") {
+    keystoreFile.set(File(project.rootDir, "debug.keystore"))
+    base64File.set(File(project.rootDir, "debug.keystore.base64"))
+}
+
+// Make sure preBuild and validateSigning tasks depend on our keystore preparation task
+tasks.matching { it.name == "preBuild" || it.name.startsWith("validateSigning") }.configureEach {
+    dependsOn(ensureDebugKeystoreTask)
 }
 
 android {
