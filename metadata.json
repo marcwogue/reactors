@@ -1,0 +1,6 @@
+{
+  "name": "Reactors",
+  "description": "Apprenez n'importe quelle langue en chattant avec un interlocuteur IA personnalisé par messagerie écrite et vocale.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
